@@ -1,0 +1,192 @@
+<html>
+<head>
+<title>DorkyVote</title>
+<script type="text/javascript">
+
+	var elVotes;
+	document.addEventListener("DOMContentLoaded", function(event) {
+		elVotes = document.getElementById("votes");
+	});
+
+	function getVotesByPost(txid, dataReceived) {
+		postData({
+			"parameters": [
+				txid
+			],
+			"method": "getpostscores",
+			"state": 1
+		}, dataReceived);
+	}
+
+	function displayVotesByPost() {
+		var url = document.getElementById("url").value;
+		
+		if (url == "") {
+			alert("Invalid data");
+			return;
+		}
+		
+		var reg = /(s|v)=([a-zA-Z0-9]+)(&|$)/g;
+		var m = reg.exec(url);
+		
+		var txid;
+		
+		if (m) {
+			console.log("first");
+			txid = m[2];
+		} else {
+			console.log("second");
+			reg = /[a-zA-Z0-9]+/g;
+			m = reg.exec(url);
+			txid = m[0];
+		}
+		
+		if (!txid) {
+			alert("Invalid data");
+			return;
+		}		
+	
+		displayGettingData();
+		
+		getVotesByPost(txid, function(data) {
+			updateWait("");
+			data.sort((a,b) => parseFloat(a.value) > parseFloat(b.value) ? -1 : 1);
+			for(const vote of data) {
+				appendVote(elVotes, vote);
+			}
+		});
+	}
+
+	function appendVote(el, vote) {
+		var elVote = document.createElement("div");
+		elVote.innerHTML = `<a target="_blank" href="https://pocketnet.app/${vote.name}">${vote.name}</a>: ${vote.value}`;
+		el.appendChild(elVote);
+		if (false && ckShowAvatars.checked){
+			var elAvatar = document.createElement("img");
+			elAvatar.src = vote.avatar;
+			elVote.prepend(elAvatar);
+		}
+	}
+
+	function getVotesByUser(username, postCount, dataReceived) {
+		postData({
+			"parameters": [
+				"",
+				username,
+				"",
+				parseFloat(postCount),
+				""
+			],
+			"method": "getrawtransactionwithmessage",
+			"state": 1
+		}, dataReceived);
+	}
+
+	function displayVotesByUser(){
+		var un = document.getElementById("username").value;
+		var postCount  = document.getElementById("postCount").value;
+
+		if (!un || !postCount){
+			alert("Invalid data");
+			return;
+		}
+
+		displayGettingData();
+
+		getVotesByUser(un, parseFloat(postCount), function(data){
+			updateWait("");
+			for(const post of data){
+				var elPost = document.createElement("div");
+				elPost.id = post.txid;
+				elPost.style.paddingTop = "10px";
+				elPost.innerHTML = `<a target="_blank" href="https://pocketnet.app/${post.userprofile.name}?s=${post.txid}&mpost=true">${post.txid}</a>`;
+				elVotes.appendChild(elPost);
+				getVotesByPost(post.txid, function(votes) {
+					votes.sort((a,b) => parseFloat(a.value) > parseFloat(b.value) ? -1 : 1);
+					var thisPost = document.getElementById(post.txid);
+					if (votes.length == 0) {
+						var elNoData = document.createElement("div");						
+						elNoData.style.color = "Red";
+						elNoData.innerText = "No votes found for this post";
+						thisPost.appendChild(elNoData);
+						return;
+					}
+					for(const vote of votes) {
+						appendVote(thisPost, vote);
+					}
+				})
+			}
+		});
+	}
+	
+	function postData(data, responseReturned){			
+		var xhr = new XMLHttpRequest();
+		//setButtonsDisabled(true);
+		xhr.onreadystatechange = function() {
+			if (this.readyState == 4) {
+				if (this.status == 200) {				
+					var response = JSON.parse(this.responseText);
+					responseReturned(response.data);
+					return;
+				} else {
+					alert(`Error: ${this.readyState}`);
+				}
+				//setButtonsDisabled(false);
+			}
+		};		
+		
+		xhr.open("POST", `https://pocketnet.app:8899/rpc/${data.method}`, true);
+		xhr.setRequestHeader("Content-type", "application/json");
+		
+		xhr.send(JSON.stringify(data));
+	}
+
+	function displayGettingData(){
+		updateWait("Getting data...");
+	}
+
+	function updateWait(text){
+		elVotes.innerHTML = text;
+	}
+
+	function setButtonsDisabled(disabled) {
+		var btns = document.getElementsByClassName("button");
+		for(const btn of btns){
+			btn.disabled  = disabled;
+		}
+	}
+</script>
+
+</head>
+<body style="font-family:Arial;text-align:center">
+	<div><b>Enter a Pocketnet post URL</b></div>
+	<div>https://pocketnet.app/username?s=xxxxxxxxxx&ref=yyyyyyyyyy</div>
+	<div>https://pocketnet.app/username?s=xxxxxxxxxx</div>
+	<br>
+	<div><b>or post ID</b></div>
+	<div>xxxxxxxxxx</div>
+
+	<p><textarea id="url" name="url" rows="5" cols="100"></textarea></p>
+
+	<div>
+		<button class="button" onclick="javascript:displayVotesByPost()">Get Votes By Post</button>
+	</div>
+
+	<br/>
+	<div><b>Get votes by user/post</b></div>
+
+	<p>User address: <input id="username" name="pnusername" size="50" type="text" /></p>
+	<p>Post count: <input id="postCount" size="50" type="text" /></p>
+
+	<div>
+		<button id="cmGetVotes" class="button" onclick="javascript:displayVotesByUser()">Get Votes By User</button>
+	</div>
+
+	<!-- <div>
+		<br/>
+		Show avatars: <input id="ckShowAvatars" type="checkbox" />
+	</div> -->
+	<br>
+	<div id="votes"></div>
+</body>
+</html>
